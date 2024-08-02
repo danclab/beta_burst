@@ -1,4 +1,5 @@
-"""Iterative burst detection on single-channel time-frequency or lagged
+"""
+Iterative burst detection on single-channel time-frequency or lagged
 coherence matrices algorithm.
 
 Authors: James Bonaiuto <james.bonaiuto@isc.cnrs.fr>
@@ -12,7 +13,7 @@ from mne.filter import filter_data
 from scipy.signal import hilbert, argrelextrema
 from scipy.stats import linregress
 
-from _utils import gaus2d, overlap, fwhm_burst_norm
+from betaburst.detection._utils import gaus2d, overlap, fwhm_burst_norm
 
 
 # Burst extraction
@@ -24,18 +25,14 @@ def extract_bursts(
     band_lims,
     fooof_thresh,
     sfreq,
-    subject,
     channel,
-    labels,
     w_size=0.26,
     remove_fooof=True,
     verbose=False,
 ):
     bursts = {
-        "subject": [],
         "channel": [],
         "trial": [],
-        "label": [],
         "waveform": [],
         "peak_freq": [],
         "peak_amp_iter": [],
@@ -47,7 +44,7 @@ def extract_bursts(
         "polarity": [],
         "volume": [],
     }
-    cycles_thr = 2
+
     # Compute ERF/ERP.
     erf = np.mean(raw_trials, axis=0)
 
@@ -60,7 +57,12 @@ def extract_bursts(
 
     # Iterate through trials
     for t_idx, tr in enumerate(TF):
-        # Subtract 1/f threshold
+
+        # Regress out ERF
+        slope, intercept, _, _, _ = linregress(erf, raw_trials[t_idx, :])
+        raw_trials[t_idx, :] = raw_trials[t_idx, :] - (intercept + slope * erf)
+        
+        # Optionally, subtract 1/f threshold.
         if remove_fooof == True:
             trial_TF = tr - fooof_thresh
             trial_TF[trial_TF < 0] = 0
@@ -68,8 +70,8 @@ def extract_bursts(
             trial_TF = tr
 
         # Skip trial if all values are zero.
-        # This should be the case for below FOOOF threshold trials,
-        # or below sham lagged coherence threshold trials.
+        # This should be the case for below-FOOOF threshold trials,
+        # or below-sham lagged coherence threshold trials.
         if (trial_TF == 0).all():
             print(
                 "\t\tSkipping trial {} because there don't exist any above-threshold values.".format(
@@ -81,13 +83,11 @@ def extract_bursts(
         # TF for iterating
         trial_TF_iter = np.copy(trial_TF)
 
-        # Regress out ERF
-        slope, intercept, _, _, _ = linregress(erf, raw_trials[t_idx, :])
-        raw_trials[t_idx, :] = raw_trials[t_idx, :] - (intercept + slope * erf)
-
         prnt_count = 0
+        
         while True:
-            # Compute noise floor
+            
+            # Compute noise floor.
             thresh = 2 * np.std(trial_TF_iter)
 
             # Find peak
@@ -97,15 +97,18 @@ def extract_bursts(
             peak_freq = search_freqs[peak_freq_idx]
             peak_amp_iter = trial_TF_iter[peak_freq_idx, peak_time_idx]
             peak_amp_base = trial_TF[peak_freq_idx, peak_time_idx]
+            
+            # Stop if no peak lies above the trheshold.
             if peak_amp_iter < thresh:
                 if t_idx not in np.unique(bursts["trial"]):
-                    print(
-                        "\t\tTrial {} contains no burst in the frequency ".format(t_idx)
-                        + "range of interest..."
-                    )
+                    if verbose == True:
+                        print(
+                            "\t\tTrial {} contains no more bursts in the frequency ".format(t_idx)
+                            + "range of interest..."
+                        )
                 break
 
-            # Fit 2D Gaussian and subtract from TF
+            # Fit 2D Gaussian and subtract from TF.
             if remove_fooof == True:
                 right_loc, left_loc, up_loc, down_loc = fwhm_burst_norm(
                     trial_TF_iter, (peak_freq_idx, peak_time_idx)
@@ -121,7 +124,7 @@ def extract_bursts(
                     proxy_trial_TF_iter, (peak_freq_idx, peak_time_idx)
                 )
 
-            # REMOVE DEGENERATE GAUSSIAN
+            # Detect and remove degenerate Gaussian (limits not found).
             vert_isnan = any(np.isnan([up_loc, down_loc]))
             horiz_isnan = any(np.isnan([right_loc, left_loc]))
             if vert_isnan:
@@ -140,38 +143,37 @@ def extract_bursts(
 
             hv_isnan = any([vert_isnan, horiz_isnan])
 
+            # Compute FWHM and convert to SD.
             fwhm_f_idx = up_loc + down_loc
             fwhm_f = (search_freqs[1] - search_freqs[0]) * fwhm_f_idx
             fwhm_t_idx = left_loc + right_loc
             fwhm_t = (times[1] - times[0]) * fwhm_t_idx
             sigma_t = (fwhm_t_idx) / 2.355
             sigma_f = (fwhm_f_idx) / 2.355
+            
+            # Fitted Gaussian.
             z = peak_amp_iter * gaus2d(
                 x_idx, y_idx, mx=peak_time_idx, my=peak_freq_idx, sx=sigma_t, sy=sigma_f
             )
             new_trial_TF_iter = trial_TF_iter - z
 
+            # Proceed only if the fitted Gaussian is not degenerate
+            # and within the requested frequency band limits.
             if all(
                 [peak_freq >= band_lims[0], peak_freq <= band_lims[1], not hv_isnan]
             ):
-                # Extract raw burst signal
-                dur = [
-                    np.max([0, peak_time_idx - left_loc]),
-                    np.min([raw_trials.shape[1], peak_time_idx + right_loc]),
-                ]
-                raw_signal = raw_trials[t_idx, dur[0] : dur[1]].reshape(1, -1)
 
-                # Bandpass filter
+                # Bandpass filtering within the burst frequency range.
                 freq_range = [
                     np.max([0, peak_freq_idx - down_loc]),
-                    np.min([len(search_freqs) - 1, peak_freq_idx + up_loc]),
+                    np.min([len(search_freqs) - 1, peak_freq_idx + up_loc])
                 ]
                 filtered = filter_data(
-                    raw_signal,
+                    raw_trials[t_idx, :].reshape(1, -1),
                     sfreq,
                     search_freqs[freq_range[0]],
                     search_freqs[freq_range[1]],
-                    verbose=False,
+                    verbose=False
                 )
 
                 # Hilbert transform
@@ -181,14 +183,14 @@ def extract_bursts(
                 instantaneous_phase = np.unwrap(np.angle(analytic_signal)) % np.pi
 
                 # Find phase local minima (near 0)
-                zero_phase_pts = argrelextrema(instantaneous_phase.T, np.less)[0]
+                min_phase_pts = argrelextrema(instantaneous_phase.T, np.less)[0]
 
-                # Find local phase minima with negative deflection closest to TF peak
+                new_peak_time_idx = peak_time_idx
+
+                # Find local phase minima with negative deflection closest to TF peak.
+                # If no minimum is found, the error is caught and no burst is added.
                 try:
-                    closest_pt = zero_phase_pts[
-                        np.argmin(np.abs((dur[1] - dur[0]) * 0.5 - zero_phase_pts))
-                    ]
-                    new_peak_time_idx = dur[0] + closest_pt
+                    new_peak_time_idx = min_phase_pts[np.argmin(np.abs(peak_time_idx - min_phase_pts))]
                     adjustment = (new_peak_time_idx - peak_time_idx) * 1 / sfreq
                 except:
                     if verbose == True:
@@ -204,24 +206,26 @@ def extract_bursts(
                         )
                     prnt_count += 1
 
-                    adjustment = 1.0
+                    adjustment = 1
 
-                # Keep if adjustment less than 30ms
+                # Keep if adjustment less than 30ms.
                 if np.abs(adjustment) < 0.03:
-                    # If burst won't be cutoff
+                    
+                    # If burst won't be cutoff...
                     if (
                         new_peak_time_idx >= half_wlen
-                        and new_peak_time_idx + half_wlen <= raw_trials.shape[1]
+                        and new_peak_time_idx + half_wlen <= len(times)
                     ):
                         peak_time = times[new_peak_time_idx]
 
                         overlapped = False
-                        t_bursts = np.where(bursts["trial"] == t_idx)[0]
 
-                        # Check for overlap
-                        for b_idx in t_bursts:
+                        # Check for overlap.
+                        for b_idx in range(len(bursts['peak_time'])):
+                            
                             o_t = bursts["peak_time"][b_idx]
                             o_fwhm_t = bursts["fwhm_time"][b_idx]
+                            
                             if overlap(
                                 [peak_time - 0.5 * fwhm_t, peak_time + 0.5 * fwhm_t],
                                 [o_t - 0.5 * o_fwhm_t, o_t + 0.5 * o_fwhm_t],
@@ -230,7 +234,8 @@ def extract_bursts(
                                 break
 
                         if not overlapped:
-                            # Get burst
+                            
+                            # Get burst.
                             burst = raw_trials[
                                 t_idx,
                                 new_peak_time_idx
@@ -238,7 +243,7 @@ def extract_bursts(
                                 + half_wlen,
                             ]
 
-                            ## Remove DC offset
+                            # Remove DC offset.
                             burst = burst - np.mean(burst)
                             burst_times = (
                                 times[
@@ -249,12 +254,12 @@ def extract_bursts(
                                 - times[new_peak_time_idx]
                             )
 
-                            # Flip if positive deflection
+                            # Flip if positive deflection.
                             peak_dists = np.abs(
-                                argrelextrema(filtered.T, np.greater)[0] - closest_pt
+                                argrelextrema(filtered.T, np.greater)[0] - new_peak_time_idx
                             )
                             trough_dists = np.abs(
-                                argrelextrema(filtered.T, np.less)[0] - closest_pt
+                                argrelextrema(filtered.T, np.less)[0] - new_peak_time_idx
                             )
 
                             polarity = 0
@@ -264,11 +269,9 @@ def extract_bursts(
                             ):
                                 burst *= -1.0
                                 polarity = 1
-                            # if (peak_time * fwhm_t) < cycles_thr:
+
                             bursts["trial"].append(int(t_idx))
-                            bursts["subject"].append(subject)
                             bursts["channel"].append(channel)
-                            bursts["label"].append(labels[t_idx])
                             bursts["waveform"].append(burst)
                             bursts["peak_freq"].append(peak_freq)
                             bursts["peak_amp_iter"].append(peak_amp_iter)
@@ -279,15 +282,11 @@ def extract_bursts(
                             bursts["fwhm_time"].append(fwhm_t)
                             bursts["polarity"].append(polarity)
                             bursts["volume"].append(np.sum(z))
-                            # else:
-                            #     continue
 
             trial_TF_iter = new_trial_TF_iter
 
-    bursts["subject"] = np.array(bursts["subject"])
     bursts["channel"] = np.array(bursts["channel"])
     bursts["trial"] = np.array(bursts["trial"])
-    bursts["label"] = np.array(bursts["label"])
     bursts["waveform"] = np.array(bursts["waveform"])
     try:
         bursts["waveform_times"] = burst_times

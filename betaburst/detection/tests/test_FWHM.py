@@ -1,4 +1,4 @@
-from burst_detection import fwhm_burst_norm
+from _utils import fwhm_burst_norm
 import numpy as np
 import unittest
 

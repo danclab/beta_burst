@@ -1,5 +1,5 @@
 import numpy as np
-
+from betaburst.superlet.superlet import superlet, scale_from_period
 
 def gen_superlet_testdata(freqs=[20, 40, 60], cycles=11, fs=1000, eps=0):
     """

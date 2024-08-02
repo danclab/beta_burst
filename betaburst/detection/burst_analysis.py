@@ -20,9 +20,9 @@ from fooof import FOOOFGroup
 
 from joblib import Parallel, delayed
 
-from burst_detection import extract_bursts
-from superlet_mne import superlets_mne_epochs
-from plot_tf_activity import plot_sub_tfs
+from betaburst.detection.burst_detection import extract_bursts
+from betaburst.superlet.superlet_epoched_data import superlets_mne_epochs
+# from plot_tf_activity import plot_sub_tfs
 
 
 class TfBursts:
@@ -106,56 +106,31 @@ class TfBursts:
 
     def __init__(
         self,
-        exp_variables: dict,
+        sfreq: float,
         freqs: np.ndarray,
         fr_band: np.ndarray,
         band_search_range: list,
         remove_fooof=True,
         n_cycles=None,
         band_limits=[8, 15, 30],
-        produce_plots=True,
-        plot_format="pdf",
     ):
-        self.exp_variables = exp_variables
+        self.sfreq = sfreq
         self.freqs = freqs
         self.fr_band = fr_band
         self.band_search_range = band_search_range
         self.remove_fooof = remove_fooof
         self.n_cycles = n_cycles
-        self.band_limits = band_limits
-        self.produce_plots = produce_plots
-        self.plot_format = plot_format
+        self.band_limits = band_limits      
 
-        # Direct access to variables, and time axis creation.
-        self.channels = exp_variables["channels"]
-        self.savepath = exp_variables["dataset_path"]
-        self.exp_time_periods = exp_variables["exp_time_periods"]
-
-        self.tmin = exp_variables["tmin"]
-        self.tmax = exp_variables["tmax"]
-        self.sfreq = exp_variables["sfreq"]
-        self.exp_time = np.linspace(
-            self.tmin,
-            self.tmax,
-            int((np.abs(self.tmax - self.tmin)) * self.sfreq),
-        )
-        self.exp_time = np.around(self.exp_time, decimals=3)
-
-    def _apply_tf(self, sub_dir: str, epochs: np.ndarray, save_results=True) -> np.ndarray:
+    def _apply_tf(self, epochs: np.ndarray) -> np.ndarray:
         """Transform time-domain data to time-frequency domain.
 
         Save the results if run for the first time, else load them.
 
         Parameters
         ----------
-        sub_dir: str
-                 Subdirectory path for a subject.
         epochs: numpy array
                 Array containing data in time domain.
-        save_results: bool, optional
-                      If "True" save the time-frequency matrices.
-                      Recommened for speeding up the process.
-                      Defaults to "True".
 
         Returns
         -------
@@ -163,72 +138,12 @@ class TfBursts:
              Array of time-frequency matrices for a set of channels and
              all trials of a single subject.
         """
+        if not hasattr(self, 'tfs'): # Check if alreay computed
+            _, _, len_trial = epochs.shape
+            self.time_lim = len_trial/self.sfreq
+            self.tfs = superlets_mne_epochs(epochs, self.freqs, n_jobs=-1)
 
-        # Number of channels and number of matrices for data saving.
-        n_channels = epochs.shape[1]
-        total_chunks = n_channels // 10 + 1
-
-        # Time-frequency decomposition.
-        print(
-            "Checking for existence of {}-based time-frequency matrices for subject {}...".format(
-                self.subject
-            )
-        )
-        # Check for existing files.
-        filename = join(sub_dir, "tfs_{}.npy".format(self.tf_method))
-        if exists(filename):
-            print("Loading file {}...".format(filename))
-            if n_channels <= 10:
-                tfs = np.load(filename)
-            else:
-                tfs = np.zeros(
-                    (epochs.shape[0], epochs.shape[1], len(self.freqs), epochs.shape[2])
-                )
-                for chunk in range(total_chunks):
-                    if chunk == 0:
-                        filename = join(sub_dir, "tfs_{}.npy".format(self.tf_method))
-                        tfs[:, :10, :, :] = np.load(filename)
-                    else:
-                        filename = join(
-                            sub_dir, "tfs_{}_({}).npy".format(self.tf_method, chunk)
-                        )
-                        tf = np.load(filename)
-                        tfs[:, chunk * 10 : chunk * 10 + tf.shape[1], :, :] = tf
-
-        # If not precomputed, apply corresponding transform.
-        else:
-            print("No such file found...")
-            print(
-                "Computing {}-based time-frequency matrices for subject {}...".format(
-                    self.tf_method, self.subject
-                )
-            )
-
-            tfs = superlets_mne_epochs(epochs, self.freqs, n_jobs=-1)
-
-            # Store results.
-            if save_results == True:
-                print("Saving time-frequency matrices...")
-                if n_channels <= 10:
-                    np.save(join(sub_dir, "tfs_{}".format(self.tf_method)), tfs)
-                else:
-                    for chunk in range(total_chunks):
-                        if chunk == 0:
-                            np.save(
-                                join(sub_dir, "tfs_{}".format(self.tf_method)),
-                                tfs[:, :10, :],
-                            )
-                        else:
-                            start = chunk * 10
-                            end = start + 10
-                            np.save(
-                                join(
-                                    sub_dir, "tfs_{}_({})".format(self.tf_method, chunk)
-                                ),
-                                tfs[:, start:end, :],
-                            )
-
-        return tfs
+        return self.tfs
 
     def _custom_fr_range(self, ch_av_psd:np.ndarray, channel_ids="all"):
         """
@@ -436,7 +351,7 @@ class TfBursts:
             aperiodic_params,
         )
 
-    def burst_extraction(self, subject: int, epochs, labels: np.ndarray, band="beta") -> None:
+    def burst_extraction(self, epochs, band="beta") -> None:
         """ Time-frequency analysis with optional plotting and burst extraction
         per subject.
 
@@ -457,195 +372,82 @@ class TfBursts:
 
         Parameters
         ----------
-        subject: int
-                 Subject whose data are analysed (from a list of subjects).
         epochs: MNE epochs object or Numpy array
                 The recordings corresponding to the subject and classes we are interested in.
-        labels: numpy array
-                Array of strings containing the labels for each trial in 'epochs'.
         band: str {"mu", "beta"}, optional
               Select band for burst detection.
               Defaults to "beta".
 
-        Attributes
+        Return
         ----------
-        subject: int
-                 Subject whose data are analysed (from a list of subjects).
+        bursts: dict
+                Contains the bursts and some parameters
         """
 
-        # Related to the time axis.
-        try:
-            baseline_begin = int(np.where(self.exp_time == self.exp_time_periods[0])[0])
-        except:
-            baseline_begin = np.where(self.exp_time >= self.exp_time_periods[0])[0][0]
-        try:
-            task_begin = int(np.where(self.exp_time == self.exp_time_periods[1])[0])
-        except:
-            task_begin = np.where(self.exp_time >= self.exp_time_periods[1])[0][0]
-        try:
-            rebound_end = int(np.where(self.exp_time == self.exp_time_periods[3])[0])
-        except:
-            rebound_end = np.where(self.exp_time <= self.exp_time_periods[3])[0][-1]
+        # TF decomposition if not already done
+        if not hasattr(self, 'tfs'):
+            _, _, len_trial = epochs.shape
+            self.time_lim = len_trial/self.sfreq 
+            self.tfs = self._apply_tf(epochs)
 
-        base_time_lims = [baseline_begin, task_begin]
-        erds_time_lims = [baseline_begin, rebound_end]
+        times =  np.linspace(
+            0,
+            self.time_lim,
+            int((np.abs(self.time_lim - 0)) * self.sfreq),
+        )
+        times = np.around(times, decimals=3)
 
-        erds_time = self.exp_time[erds_time_lims[0] : erds_time_lims[1] + 1]
-
-        # Directory for saving intermediate data.
-        self.subject = subject
-        sub_dir = join(self.savepath, "sub_{}/".format(self.subject))
-
-        # ----- #
-        # 1. Time-frequency decomposition and PSD computation.
-        tfs = self._apply_tf(sub_dir, epochs)
-
-        # Removal of edge effects introduced by the time-frequency transform.
-        print("Trimming time-frequency matrices in order to remove edge-effects....")
-        tfs = tfs[:, :, :, erds_time_lims[0] : erds_time_lims[1] + 1]
-
-        # ----- #
+        # Average TF decomposition
         av_psds = np.mean(
-            tfs[:, :, :, base_time_lims[0] : base_time_lims[1]], axis=(0, 3)
+             self.tfs, axis=(0, 3)
         )
 
-        # 2. Creation of FOOOF model for removing aperiodic activity and
+        # FOOOF model to remove aperiodic activity and
         # adjustment of mu and beta bands range per channel.
 
-        if self.remove_fooof == True:
-            try:
-                mu_bands = np.load(
-                    join(sub_dir, "mu_bands_{}.npy".format(self.tf_method))
-                )
-                beta_bands = np.load(
-                    join(sub_dir, "beta_bands_{}.npy".format(self.tf_method))
-                )
-
-                with open(
-                    join(sub_dir, "mu_search_ranges_{}.pkl".format(self.tf_method)),
-                    "rb",
-                ) as pickle_file:
-                    mu_search_ranges = pickle.load(pickle_file)
-                with open(
-                    join(sub_dir, "beta_search_ranges_{}.pkl".format(self.tf_method)),
-                    "rb",
-                ) as pickle_file:
-                    beta_search_ranges = pickle.load(pickle_file)
-
-                with open(
-                    join(sub_dir, "mu_fooof_thresholds_{}.pkl".format(self.tf_method)),
-                    "rb",
-                ) as pickle_file:
-                    mu_thresholds = pickle.load(pickle_file)
-                with open(
-                    join(
-                        sub_dir, "beta_fooof_thresholds_{}.pkl".format(self.tf_method)
-                    ),
-                    "rb",
-                ) as pickle_file:
-                    beta_thresholds = pickle.load(pickle_file)
-
-                aperiodic_params = np.load(
-                    join(sub_dir, "aperiodic_params_{}.npy".format(self.tf_method))
-                )
-
-                print(
-                    "Loading custom, subject- and channel-specific adjusted frequency bands and FOOOF thresholds..."
-                )
-
-            except:
-                print(
-                    "Computing custom, subject- and channel-specific adjusted frequency bands and FOOOF thresholds..."
-                )
-
-                # Adjust mu and beta band limits depending on the fitted model.
-                (
-                    mu_bands,
-                    beta_bands,
-                    mu_search_ranges,
-                    beta_search_ranges,
-                    aperiodic_params,
-                ) = self._custom_fr_range(av_psds)
-
-                # Baseline noise (in linear space)
-                mu_thresholds = []
-                beta_thresholds = []
-                for ch_id, (mu_search_range, beta_search_range) in enumerate(
-                    zip(mu_search_ranges, beta_search_ranges)
-                ):
-                    if mu_search_range.size == 1:
-                        mu_threshold = []  # Empty list if no mu band is detected
-                    else:
-                        mu_threshold = np.power(
-                            10, aperiodic_params[ch_id, 0].reshape(-1, 1)
-                        ) / np.power(
-                            self.freqs[mu_search_range],
-                            aperiodic_params[ch_id, 1].reshape(-1, 1),
-                        )
-                    mu_thresholds.append(mu_threshold)
-
-                    if beta_search_range.size == 1:
-                        beta_threshold = [] # Empty list if no beta band is detected
-                    else:
-                        beta_threshold = np.power(
-                            10, aperiodic_params[ch_id, 0].reshape(-1, 1)
-                        ) / np.power(
-                            self.freqs[beta_search_range],
-                            aperiodic_params[ch_id, 1].reshape(-1, 1),
-                        )
-                    beta_thresholds.append(beta_threshold)
-
-                # Model parameters saving.
-                print(
-                    "Saving FOOOF model aperiodic parameters and the custom frequency bands for future reference..."
-                )
-                np.save(
-                    join(sub_dir, "aperiodic_params_{}".format(self.tf_method)),
-                    aperiodic_params,
-                )
-                np.save(join(sub_dir, "mu_bands_{}".format(self.tf_method)), mu_bands)
-                np.save(
-                    join(sub_dir, "beta_bands_{}".format(self.tf_method)), beta_bands
-                )
-
-                with open(
-                    join(sub_dir, "mu_search_ranges_{}.pkl".format(self.tf_method)),
-                    "wb",
-                ) as pickle_file:
-                    pickle.dump(mu_search_ranges, pickle_file)
-                with open(
-                    join(sub_dir, "beta_search_ranges_{}.pkl".format(self.tf_method)),
-                    "wb",
-                ) as pickle_file:
-                    pickle.dump(beta_search_ranges, pickle_file)
-                with open(
-                    join(sub_dir, "mu_fooof_thresholds_{}.pkl".format(self.tf_method)),
-                    "wb",
-                ) as pickle_file:
-                    pickle.dump(mu_thresholds, pickle_file)
-                with open(
-                    join(
-                        sub_dir, "beta_fooof_thresholds_{}.pkl".format(self.tf_method)
-                    ),
-                    "wb",
-                ) as pickle_file:
-                    pickle.dump(beta_thresholds, pickle_file)
-
+        if self.remove_fooof:
             print(
-                "The custom mu bands span a range of frequencies from {} to {} Hz.".format(
-                    np.nanmin(mu_bands), np.nanmax(mu_bands)
-                )
+                "Computing custom, subject- and channel-specific adjusted frequency bands and FOOOF thresholds..."
             )
-            print(
-                "The custom beta bands span a range of frequencies from {} to {} Hz.".format(
-                    np.nanmin(beta_bands), np.nanmax(beta_bands)
-                )
-            )
+            # Adjust mu and beta band limits depending on the fitted model.
+            (
+                mu_bands,
+                beta_bands,
+                mu_search_ranges,
+                beta_search_ranges,
+                aperiodic_params,
+            ) = self._custom_fr_range(av_psds)
+
+            # Baseline noise (in linear space)
+            mu_thresholds = []
+            beta_thresholds = []
+            for ch_id, (mu_search_range, beta_search_range) in enumerate(
+                zip(mu_search_ranges, beta_search_ranges)
+            ):
+                if mu_search_range.size == 1:
+                    mu_threshold = []  # Empty list if no mu band is detected
+                else:
+                    mu_threshold = np.power(
+                        10, aperiodic_params[ch_id, 0].reshape(-1, 1)
+                    ) / np.power(
+                        self.freqs[mu_search_range],
+                        aperiodic_params[ch_id, 1].reshape(-1, 1),
+                    )
+                mu_thresholds.append(mu_threshold)
+
+                if beta_search_range.size == 1:
+                    beta_threshold = [] # Empty list if no beta band is detected
+                else:
+                    beta_threshold = np.power(
+                        10, aperiodic_params[ch_id, 0].reshape(-1, 1)
+                    ) / np.power(
+                        self.freqs[beta_search_range],
+                        aperiodic_params[ch_id, 1].reshape(-1, 1),
+                    )
+                beta_thresholds.append(beta_threshold) 
 
         del av_psds
-
-        # ----- #
-        # 3. Selection of proper variables to use, based on the 'band' parameter.
+        # Variable setting, based on the 'band' parameter.
         if self.remove_fooof:
             if band == "mu":
                 band_search_ranges = mu_search_ranges
@@ -678,52 +480,14 @@ class TfBursts:
             (self.freqs >= canon_band[0] - 3) & (self.freqs <= canon_band[1] + 3)
         )[0]
 
-        # ----- #
-        # 4. Optional plot of time-frequency decomposition and fits for
-        # channels C3 and C4.
-        if self.produce_plots == True and\
-            self.remove_fooof == True:
-            c3 = int(np.where((np.array(self.channels) == "C3"))[0])
-            c4 = int(np.where((np.array(self.channels) == "C4"))[0])
-
-            if len(thresholds[c3]) > 0 and len(thresholds[c4]) > 0:
-                psds = np.mean(
-                    tfs[:, :, :, base_time_lims[0] : base_time_lims[1]], axis=3
-                )
-                c3c4 = [c3, c4]
-                plot_sub_tfs(
-                    self.subject,
-                    labels,
-                    tfs,
-                    psds,
-                    thresholds,
-                    c3c4,
-                    erds_time,
-                    self.freqs,
-                    band_search_ranges,
-                    band,
-                    self.tf_method,
-                    self.savepath,
-                    plot_format=self.plot_format,
-                )
-                del psds
-
-            else:
-                print(
-                    "One or both of channels C3 and C4 have no periodic activity in the selected band. Plotting aborted..."
-                )
-
-        # ----- #
-        # 5. Burst detection.
+        # Burst detection.
         if self.remove_fooof:
             msg = "with aperiodic activity subtraction"
         else:
             msg = "without aperiodic activity subtraction"
 
         print("Initiating {} band burst extraction {}...".format(band, msg))
-
-        # Option to remove aperiodic activity or proceed with lagged coherence
-        # instead of power-based TF representations.
+        # Use canocical beta band for channels without periodic activity.
         if self.remove_fooof:
 
             # Use canocical beta band for channels without periodic activity.
@@ -756,27 +520,24 @@ class TfBursts:
                 thresholds[ch_id] = canon_threshold
                 bd_bands[ch_id] = canon_band
         
-            sub_bursts = Parallel(n_jobs=epochs.shape[1], require="sharedmem")(
+            self.bursts = Parallel(n_jobs=epochs.shape[1], require="sharedmem")(
                 delayed(extract_bursts)(
-                    epochs[:, ch_id, erds_time_lims[0] : erds_time_lims[1] + 1],
-                    tfs[:, ch_id, band_search_ranges[ch_id]],
-                    erds_time,
+                    epochs[:, ch_id, :],
+                    self.tfs[:, ch_id, band_search_ranges[ch_id]],
+                    times,
                     self.freqs[band_search_ranges[ch_id]],
                     bd_bands[ch_id],
                     thresholds[ch_id].reshape(-1,1),
                     self.sfreq,
-                    self.subject,
                     ch_id,
-                    labels,
                     w_size=w_size,
                     remove_fooof=self.remove_fooof
                 )
                 for ch_id in range(epochs.shape[1])
-            )  # Extraction is performed on parallel along channels
+            )
         
 
         else:
-
             print(
                 "\tBurst extraction for all channels: from {} to {} Hz.".format(
                     canon_band[0], canon_band[1]
@@ -784,41 +545,20 @@ class TfBursts:
             )
 
             null_threshold = np.zeros((self.freqs[canon_band_range].shape[0], 1))
-            sub_bursts = Parallel(n_jobs=epochs.shape[1], require="sharedmem")(
+            self.bursts = Parallel(n_jobs=epochs.shape[1], require="sharedmem")(
                 delayed(extract_bursts)(
-                    epochs[:, ch_id, erds_time_lims[0] : erds_time_lims[1] + 1],
-                    tfs[:, ch_id, canon_band_range],
-                    erds_time,
+                    epochs[:, ch_id, :],
+                    self.tfs[:, ch_id, canon_band_range],
+                    times,
                     self.freqs[canon_band_range],
                     canon_band,
                     null_threshold,
                     self.sfreq,
-                    self.subject,
                     ch_id,
-                    labels,
                     w_size=w_size,
                     remove_fooof=False
                 )
                 for ch_id in range(epochs.shape[1])
-            ) # Extraction is performed on parallel along channels
-
-        # Burst results saving.
-        print(
-            "Saving {} band burst dictionary for subject {}...".format(
-                band, self.subject
             )
-        )
-        np.save(
-            join(
-                sub_dir, "{}_bursts_{}{}".format(band, self.tf_method, fooof_save_str)
-            ),
-            sub_bursts,
-        )
-        print("Results saved.")
 
-        del epochs
-        del tfs
-        if self.remove_fooof == True and self.tf_method != "lagged_coherence":
-            del aperiodic_params
-            del thresholds
-        del sub_bursts
+        return self.bursts

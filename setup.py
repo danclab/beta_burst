@@ -12,7 +12,9 @@ setup(
         'scipy',
         'matplotlib',
         'mne',
-        'sklearn'
+        'scikit-learn',
+        'neurodsp',
+        'fooof'
     ],
     entry_points={
         'console_scripts': [
