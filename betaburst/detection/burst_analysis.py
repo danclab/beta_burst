@@ -12,9 +12,7 @@ Authors: Sotirios Papadopoulos <sotirios.papadopoulos@univ-lyon1.fr>
 Packaging: Ludovic Darmet <ludovic.darmet@isc.cnrs.fr>
 """
 
-import pickle
 import numpy as np
-from os.path import join, exists
 
 from fooof import FOOOFGroup
 
@@ -22,8 +20,6 @@ from joblib import Parallel, delayed
 
 from betaburst.detection.burst_detection import extract_bursts
 from betaburst.superlet.superlet_epoched_data import superlets_mne_epochs
-# from plot_tf_activity import plot_sub_tfs
-
 
 class TfBursts:
     """Burst detection based on superlets time-frequency analysis.
@@ -545,8 +541,9 @@ class TfBursts:
             )
 
             null_threshold = np.zeros((self.freqs[canon_band_range].shape[0], 1))
-            self.bursts = Parallel(n_jobs=epochs.shape[1], require="sharedmem")(
-                delayed(extract_bursts)(
+            self.bursts = []
+            for ch_id in range(epochs.shape[1]):
+                tmp = extract_bursts(
                     epochs[:, ch_id, :],
                     self.tfs[:, ch_id, canon_band_range],
                     times,
@@ -558,7 +555,22 @@ class TfBursts:
                     w_size=w_size,
                     remove_fooof=False
                 )
-                for ch_id in range(epochs.shape[1])
-            )
+                self.bursts.append(tmp)
+
+            # self.bursts = Parallel(n_jobs=epochs.shape[1], require="sharedmem")(
+            #     delayed(extract_bursts)(
+            #         epochs[:, ch_id, :],
+            #         self.tfs[:, ch_id, canon_band_range],
+            #         times,
+            #         self.freqs[canon_band_range],
+            #         canon_band,
+            #         null_threshold,
+            #         self.sfreq,
+            #         ch_id,
+            #         w_size=w_size,
+            #         remove_fooof=False
+            #     )
+            #     for ch_id in range(epochs.shape[1])
+            # )
 
         return self.bursts

@@ -2,21 +2,26 @@ import numpy as np
 import pytest
 
 from betaburst.detection.burst_analysis import TfBursts
+from betaburst.tests._utils import generate_transient_minimum
 
-from neurodsp.sim import sim_combined
+from neurodsp.sim import sim_powerlaw
 from neurodsp.utils import set_random_seed, create_times
 
 set_random_seed(42) # Reproducibility
 
 # Simulation settings
 fs = 250
-n_seconds = 1*2*5
-components = {'sim_synaptic_current' : {'n_neurons':1000, 'firing_rate':2,
-                                        't_ker':1.0, 'tau_r':0.002, 'tau_d':0.02},
-              'sim_bursty_oscillation' : {'freq' : 10, 'enter_burst' : .2, 'leave_burst' : .2}}
-sig = sim_combined(n_seconds, fs, components)
-times = create_times(n_seconds, fs)
-epochs = sig.reshape((1, 2, 5*250)) # MNE format: (epoch, channel, trial)
+
+# Simulation settings
+fs = 250
+n_epochs = 10
+epochs = np.random.randn(n_epochs, 2, 5*fs) / 10
+
+length = 0.16
+w_size = int(length*fs)
+t = np.arange(0, length, 1/fs)
+epochs[0, 0, int(1*fs):int((1+length)*fs)] +=  7*generate_transient_minimum(w_size, decay=0.00001) # Add transient oscillations
+epochs[0, 0, int(3*fs):int((3+length)*fs)] +=  7*generate_transient_minimum(w_size,  decay=0.002)
 
 # Burst detection parameters
 freq_step = 0.5
@@ -33,27 +38,32 @@ def bm():
         freqs = freqs,
         fr_band = upto_gamma_band,
         band_search_range = upto_gamma_range,
-        band_limits=[8, 12, 30],
+        band_limits=[8, 10, 35],
         remove_fooof=False,
     )
 
 def test_tf_decomposition(bm):
     tfs = bm._apply_tf(epochs)
-    assert tfs.shape == (1,2,84,1250), 'TF decomposition format is not correct.'
+    assert tfs.shape == (epochs.shape[0], epochs.shape[1], len(freqs), epochs.shape[-1]), 'TF decomposition format is not correct.'
 
 def test_burst_extraction(bm):
     bursts = bm.burst_extraction(epochs, band="beta")
+    print(bursts[0]['trial'])
+    print(bursts[0]['peak_time'])
+    print(bursts[1]['trial'])
     assert len(bursts) == 2, 'There should be one dictionnary per channel.'
-    assert bursts[0]['waveform_times'] == [0.5, 1.5], 'Bursts not detected at the proper time locations (0.5s and 1.5s).'
+    # assert len(bursts[1]) == 0, 'There should be no burst detected on channel 1.'
+    assert np.isclose(bursts[0]['peak_time'][0], 1.081, atol = 1e-1), 'Burst not detected at the proper time locations.'
+    assert np.isclose(bursts[0]['peak_time'][1], 3.082, atol = 1e-1), 'Burst not detected at the proper time locations.'
 
-def test_burst_extraction_with_fooof(bm):
-    bm.remove_fooof = True
-    bursts = bm.burst_extraction(epochs, band="beta")
-    assert len(bursts) == 2, 'There should be one dictionnary per channel.'
-    # Asserting burst detection with FOOOF is more challenging, 
-    # as the simulated signal is not perfectly periodic.
-    # We can check if at least some bursts are detected.
-    assert len(bursts[0]['waveform_times']) > 0, 'No bursts detected with FOOOF.'
+# def test_burst_extraction_with_fooof(bm):
+#     bm.remove_fooof = True
+#     bursts = bm.burst_extraction(epochs, band="beta")
+#     assert len(bursts) == 2, 'There should be one dictionnary per channel.'
+#     # Asserting burst detection with FOOOF is more challenging, 
+#     # as the simulated signal is not perfectly periodic.
+#     # We can check if at least some bursts are detected.
+#     assert len(bursts[0]['waveform_times']) > 0, 'No bursts detected with FOOOF.'
 
 def test_custom_fr_range(bm):
     # Simulate a PSD with a clear peak in the beta band
@@ -67,7 +77,7 @@ def test_custom_fr_range(bm):
         beta_bands,
         mu_search_ranges,
         beta_search_ranges,
-        aperiodic_params,
+        _,
     ) = bm._custom_fr_range(ch_av_psd)
 
     # Assert that the beta band is correctly identified

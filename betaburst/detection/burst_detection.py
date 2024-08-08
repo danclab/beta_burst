@@ -88,7 +88,8 @@ def extract_bursts(
         while True:
             
             # Compute noise floor.
-            thresh = 2 * np.std(trial_TF_iter)
+            std_noise = 4
+            thresh = std_noise * np.std(trial_TF_iter)
 
             # Find peak
             [peak_freq_idx, peak_time_idx] = np.unravel_index(
