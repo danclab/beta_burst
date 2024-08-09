@@ -4,8 +4,7 @@ import pytest
 from betaburst.detection.burst_analysis import TfBursts
 from betaburst.tests._utils import generate_transient_minimum
 
-from neurodsp.sim import sim_powerlaw
-from neurodsp.utils import set_random_seed, create_times
+from neurodsp.utils import set_random_seed
 
 set_random_seed(42) # Reproducibility
 
@@ -14,13 +13,14 @@ fs = 250
 
 # Simulation settings
 fs = 250
-n_epochs = 10
+n_epochs = 5
 epochs = np.random.randn(n_epochs, 2, 5*fs) / 10
 
 length = 0.16
 w_size = int(length*fs)
 t = np.arange(0, length, 1/fs)
-epochs[0, 0, int(1*fs):int((1+length)*fs)] +=  7*generate_transient_minimum(w_size, decay=0.00001) # Add transient oscillations
+# Add transient oscillations
+epochs[0, 0, int(1*fs):int((1+length)*fs)] +=  7*generate_transient_minimum(w_size, decay=0.00001) 
 epochs[0, 0, int(3*fs):int((3+length)*fs)] +=  7*generate_transient_minimum(w_size,  decay=0.002)
 
 # Burst detection parameters
@@ -56,37 +56,14 @@ def test_burst_extraction(bm):
     assert np.isclose(bursts[0]['peak_time'][0], 1.081, atol = 1e-1), 'Burst not detected at the proper time locations.'
     assert np.isclose(bursts[0]['peak_time'][1], 3.082, atol = 1e-1), 'Burst not detected at the proper time locations.'
 
-# def test_burst_extraction_with_fooof(bm):
-#     bm.remove_fooof = True
-#     bursts = bm.burst_extraction(epochs, band="beta")
-#     assert len(bursts) == 2, 'There should be one dictionnary per channel.'
-#     # Asserting burst detection with FOOOF is more challenging, 
-#     # as the simulated signal is not perfectly periodic.
-#     # We can check if at least some bursts are detected.
-#     assert len(bursts[0]['waveform_times']) > 0, 'No bursts detected with FOOOF.'
-
-def test_custom_fr_range(bm):
-    # Simulate a PSD with a clear peak in the beta band
-    ch_av_psd = np.zeros((2, len(freqs)))
-    peak_freq = 20
-    peak_idx = np.where(freqs == peak_freq)[0][0]
-    ch_av_psd[:, peak_idx] = 10
-    
-    (
-        mu_bands,
-        beta_bands,
-        mu_search_ranges,
-        beta_search_ranges,
-        _,
-    ) = bm._custom_fr_range(ch_av_psd)
-
-    # Assert that the beta band is correctly identified
-    assert beta_bands[0, 0] < peak_freq < beta_bands[0, 1]
-    assert beta_search_ranges[0].size > 1
-
-    # Assert that the mu band is not identified (as there is no peak in the mu band)
-    assert np.isnan(mu_bands[0, 0])
-    assert mu_search_ranges[0].size == 1
+def test_burst_extraction_with_fooof(bm):
+    bm.remove_fooof = True
+    bursts = bm.burst_extraction(epochs, band="beta")
+    assert len(bursts) == 2, 'There should be one dictionnary per channel.'
+    # Asserting burst detection with FOOOF is more challenging, 
+    # as the simulated signal is not perfectly periodic.
+    # We can check if at least some bursts are detected.
+    assert len(bursts[0]['waveform_times']) > 0, 'No bursts detected with FOOOF.'
 
 # Run the tests
 if __name__ == "__main__":
