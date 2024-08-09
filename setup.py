@@ -12,6 +12,7 @@ setup(
         'scipy',
         'matplotlib',
         'mne',
+        'pandas',
         'scikit-learn',
         'fooof'
     ],
