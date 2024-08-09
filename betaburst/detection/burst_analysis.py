@@ -118,7 +118,7 @@ class TfBursts:
         self.n_cycles = n_cycles
         self.band_limits = band_limits      
 
-    def _apply_tf(self, epochs: np.ndarray) -> np.ndarray:
+    def _apply_tf(self, epochs: np.ndarray, order_max=50, order_min=4, c_1=3) -> np.ndarray:
         """Transform time-domain data to time-frequency domain.
 
         Save the results if run for the first time, else load them.
@@ -127,6 +127,12 @@ class TfBursts:
         ----------
         epochs: numpy array
                 Array containing data in time domain.
+        order_max: int, optional. Default 50
+                Parameter of the superlet algorithm (see [1] Moca et al.).
+        order_min: int, optional. Default 4
+                Parameter of the superlet algorithm (see [1] Moca et al.).
+        c_1: int, optional. Default 3
+                Parameter of the superlet algorithm (see [1] Moca et al.).
 
         Returns
         -------
@@ -137,7 +143,7 @@ class TfBursts:
         if not hasattr(self, 'tfs'): # Check if alreay computed
             _, _, len_trial = epochs.shape
             self.time_lim = len_trial/self.sfreq
-            self.tfs = superlets_mne_epochs(epochs, self.freqs, n_jobs=-1)
+            self.tfs = superlets_mne_epochs(epochs, self.freqs, order_max=order_max, order_min=order_min, c_1=c_1, n_jobs=-1)
 
         return self.tfs
 
@@ -347,7 +353,7 @@ class TfBursts:
             aperiodic_params,
         )
 
-    def burst_extraction(self, epochs, band="beta") -> None:
+    def burst_extraction(self, epochs, band="beta", std_noise=2) -> None:
         """ Time-frequency analysis with optional plotting and burst extraction
         per subject.
 
@@ -369,15 +375,16 @@ class TfBursts:
         Parameters
         ----------
         epochs: MNE epochs object or Numpy array
-                The recordings corresponding to the subject and classes we are interested in.
-        band: str {"mu", "beta"}, optional
-              Select band for burst detection.
-              Defaults to "beta".
+            The recordings corresponding to the subject and classes we are interested in.
+        band: str {"mu", "beta"}, optional. Default "beta".
+            Select band for burst detection.
+        std_noise: float, optional. Default 2.
+            Number of std to distinguish between noise floor and peak in the time-frequency.
 
         Return
         ----------
         bursts: dict
-                Contains the bursts and some parameters
+            Contains the bursts and some parameters
         """
 
         # TF decomposition if not already done
@@ -541,9 +548,8 @@ class TfBursts:
             )
 
             null_threshold = np.zeros((self.freqs[canon_band_range].shape[0], 1))
-            self.bursts = []
-            for ch_id in range(epochs.shape[1]):
-                tmp = extract_bursts(
+            self.bursts = Parallel(n_jobs=epochs.shape[1], require="sharedmem")(
+                delayed(extract_bursts)(
                     epochs[:, ch_id, :],
                     self.tfs[:, ch_id, canon_band_range],
                     times,
@@ -553,24 +559,10 @@ class TfBursts:
                     self.sfreq,
                     ch_id,
                     w_size=w_size,
+                    std_noise=std_noise,
                     remove_fooof=False
                 )
-                self.bursts.append(tmp)
-
-            # self.bursts = Parallel(n_jobs=epochs.shape[1], require="sharedmem")(
-            #     delayed(extract_bursts)(
-            #         epochs[:, ch_id, :],
-            #         self.tfs[:, ch_id, canon_band_range],
-            #         times,
-            #         self.freqs[canon_band_range],
-            #         canon_band,
-            #         null_threshold,
-            #         self.sfreq,
-            #         ch_id,
-            #         w_size=w_size,
-            #         remove_fooof=False
-            #     )
-            #     for ch_id in range(epochs.shape[1])
-            # )
+                for ch_id in range(epochs.shape[1])
+            )
 
         return self.bursts

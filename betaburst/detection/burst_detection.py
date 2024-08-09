@@ -26,6 +26,7 @@ def extract_bursts(
     fooof_thresh,
     sfreq,
     channel,
+    std_noise=2,
     w_size=0.26,
     remove_fooof=True,
     verbose=False,
@@ -88,7 +89,6 @@ def extract_bursts(
         while True:
             
             # Compute noise floor.
-            std_noise = 4
             thresh = std_noise * np.std(trial_TF_iter)
 
             # Find peak
