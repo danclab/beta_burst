@@ -227,7 +227,7 @@ def extract_bursts(
                             o_t = bursts["peak_time"][b_idx]
                             o_fwhm_t = bursts["fwhm_time"][b_idx]
                             
-                            if overlap(
+                            if bursts['trial']==t_idx and overlap(
                                 [peak_time - 0.5 * fwhm_t, peak_time + 0.5 * fwhm_t],
                                 [o_t - 0.5 * o_fwhm_t, o_t + 0.5 * o_fwhm_t],
                             ):
