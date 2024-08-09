@@ -8,9 +8,11 @@
 
 **BetaBursts** is a Python package designed to detect beta bursts in brain signals, specifically EEG and MEG data. Beta bursts are rapid oscillations in the beta frequency band (13-30 Hz) and are crucial for movement-related cortical dynamics. This package provides a reliable method for detecting these bursts using advanced signal processing techniques.
 
-The method is described in the paper by Szul et al. (2023) "Diverse beta burst waveform motifs characterize movement-related cortical dynamics" Progress in Neurobiology=
-\url{https://doi.org/10.1016/j.pneurobio.2023.102490}. 
+The method is described in the paper by [Maciek Szul](http://www.isc.cnrs.fr/index.rvt?member=maciek%5F%5Fszul) et al. (2023) "Diverse beta burst waveform motifs characterize movement-related cortical dynamics" Progress in Neurobiology. https://doi.org/10.1016/j.pneurobio.2023.102490
 
+The code have been developed by Maciek Szul, [Sotirios Papadopoulos](http://www.isc.cnrs.fr/index.rvt?member=sotiris%5Fpapadopoulos), [Ludovic DARMET](http://www.isc.cnrs.fr/index.rvt?language=en&member=ludovic%5Fdarmet) and [Jimmy Bonaiuto](http://www.isc.cnrs.fr/index.rvt?member=james%5Fbonaiuto), head of the [DANC lab](https://www.danclab.com/).
+
+![Visual description of the algorithm](img/beta_burst.png "Algorithm description")
 ## Features
 
 - Detect beta bursts in EEG and MEG signals.
