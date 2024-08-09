@@ -13,7 +13,6 @@ setup(
         'matplotlib',
         'mne',
         'scikit-learn',
-        'neurodsp',
         'fooof'
     ],
     entry_points={

@@ -12,7 +12,7 @@ The method is described in the paper by [Maciek Szul](http://www.isc.cnrs.fr/ind
 
 The code have been developed by Maciek Szul, [Sotirios Papadopoulos](http://www.isc.cnrs.fr/index.rvt?member=sotiris%5Fpapadopoulos), [Ludovic DARMET](http://www.isc.cnrs.fr/index.rvt?language=en&member=ludovic%5Fdarmet) and [Jimmy Bonaiuto](http://www.isc.cnrs.fr/index.rvt?member=james%5Fbonaiuto), head of the [DANC lab](https://www.danclab.com/).
 
-![Visual Description](./img/algo_description.png)
+![Visual Description of the algorithm](./img/algo_description.png)
 ## Features
 
 - Detect beta bursts in EEG and MEG signals.
