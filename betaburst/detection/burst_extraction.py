@@ -28,6 +28,7 @@ def extract_bursts(
     channel,
     std_noise=2,
     w_size=0.26,
+    regress_ERF=False,
     remove_fooof=True,
     verbose=False,
 ):
@@ -45,7 +46,6 @@ def extract_bursts(
         "polarity": [],
         "volume": [],
     }
-
     # Compute ERF/ERP.
     erf = np.mean(raw_trials, axis=0)
 
@@ -60,8 +60,9 @@ def extract_bursts(
     for t_idx, tr in enumerate(TF):
 
         # Regress out ERF
-        slope, intercept, _, _, _ = linregress(erf, raw_trials[t_idx, :])
-        raw_trials[t_idx, :] = raw_trials[t_idx, :] - (intercept + slope * erf)
+        if regress_ERF:
+            slope, intercept, _, _, _ = linregress(erf, raw_trials[t_idx, :])
+            raw_trials[t_idx, :] = raw_trials[t_idx, :] - (intercept + slope * erf)
         
         # Optionally, subtract 1/f threshold.
         if remove_fooof == True:
@@ -220,14 +221,15 @@ def extract_bursts(
                         peak_time = times[new_peak_time_idx]
 
                         overlapped = False
+                        t_bursts = np.where(bursts["trial"] == t_idx)[0]
 
                         # Check for overlap.
-                        for b_idx in range(len(bursts['peak_time'])):
+                        for b_idx in t_bursts:
                             
                             o_t = bursts["peak_time"][b_idx]
                             o_fwhm_t = bursts["fwhm_time"][b_idx]
                             
-                            if bursts['trial']==t_idx and overlap(
+                            if overlap(
                                 [peak_time - 0.5 * fwhm_t, peak_time + 0.5 * fwhm_t],
                                 [o_t - 0.5 * o_fwhm_t, o_t + 0.5 * o_fwhm_t],
                             ):

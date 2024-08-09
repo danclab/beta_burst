@@ -314,8 +314,8 @@ class TfBursts:
                 mu_bands.append(mu_band)
                 mu_search_ranges.append(mu_search_range)
 
-                beta_bands.append(np.array([np.NAN, np.NAN]))
-                beta_search_ranges.append(np.array([np.NAN]))
+                beta_bands.append(np.array([np.nan, np.nan]))
+                beta_search_ranges.append(np.array([np.nan]))
 
             elif low.size == 0 and high.size > 0:
                 # If many peaks have been detected, expand the frequency range
@@ -339,8 +339,8 @@ class TfBursts:
                 beta_bands.append(beta_band)
                 beta_search_ranges.append(beta_search_range)
 
-                mu_bands.append(np.array([np.NAN, np.NAN]))
-                mu_search_ranges.append(np.array([np.NAN]))
+                mu_bands.append(np.array([np.nan, np.nan]))
+                mu_search_ranges.append(np.array([np.nan]))
 
         mu_bands = np.array(mu_bands)
         beta_bands = np.array(beta_bands)
@@ -353,7 +353,7 @@ class TfBursts:
             aperiodic_params,
         )
 
-    def burst_extraction(self, epochs, band="beta", std_noise=2) -> None:
+    def burst_extraction(self, epochs, band="beta", std_noise=2, regress_ERF=False) -> None:
         """ Time-frequency analysis with optional plotting and burst extraction
         per subject.
 
@@ -380,6 +380,8 @@ class TfBursts:
             Select band for burst detection.
         std_noise: float, optional. Default 2.
             Number of std to distinguish between noise floor and peak in the time-frequency.
+        regress_erf: boolean. Default to False.
+            Regress out ERF/ERP to remove the slow dynamics.
 
         Return
         ----------
@@ -389,6 +391,7 @@ class TfBursts:
 
         # TF decomposition if not already done
         if not hasattr(self, 'tfs'):
+            print('Extracting time frequency decomposition...')
             _, _, len_trial = epochs.shape
             self.time_lim = len_trial/self.sfreq 
             self.tfs = self._apply_tf(epochs)
@@ -466,7 +469,6 @@ class TfBursts:
                 w_size = 0.26
 
             msg = "with aperiodic activity subtraction"
-            fooof_save_str = ""
 
         else:
             if band == "mu":
@@ -477,7 +479,6 @@ class TfBursts:
                 w_size = 0.26
 
             msg = "without aperiodic activity subtraction"
-            fooof_save_str = "_nfs"
 
         canon_band_range = np.where(
             (self.freqs >= canon_band[0] - 3) & (self.freqs <= canon_band[1] + 3)
@@ -525,7 +526,7 @@ class TfBursts:
         
             self.bursts = Parallel(n_jobs=epochs.shape[1], require="sharedmem")(
                 delayed(extract_bursts)(
-                    epochs[:, ch_id, :],
+                    np.copy(epochs[:, ch_id, :]),
                     self.tfs[:, ch_id, band_search_ranges[ch_id]],
                     times,
                     self.freqs[band_search_ranges[ch_id]],
@@ -534,6 +535,8 @@ class TfBursts:
                     self.sfreq,
                     ch_id,
                     w_size=w_size,
+                    std_noise=std_noise,
+                    regress_ERF=regress_ERF,
                     remove_fooof=self.remove_fooof
                 )
                 for ch_id in range(epochs.shape[1])
