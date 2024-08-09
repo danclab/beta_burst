@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from betaburst.detection.burst_analysis import TfBursts
+from betaburst.detection.burst_detection import TfBursts
 from betaburst.tests._utils import generate_transient_minimum
 
 from neurodsp.utils import set_random_seed
