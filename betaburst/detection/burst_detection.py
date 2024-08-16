@@ -21,6 +21,7 @@ from joblib import Parallel, delayed
 from betaburst.detection.burst_extraction import extract_bursts
 from betaburst.superlet.superlet_epoched_data import superlets_mne_epochs
 
+
 class TfBursts:
     """Burst detection based on superlets time-frequency analysis.
 
@@ -116,9 +117,11 @@ class TfBursts:
         self.band_search_range = band_search_range
         self.remove_fooof = remove_fooof
         self.n_cycles = n_cycles
-        self.band_limits = band_limits      
+        self.band_limits = band_limits
 
-    def _apply_tf(self, epochs: np.ndarray, order_max=50, order_min=4, c_1=3) -> np.ndarray:
+    def _apply_tf(
+        self, epochs: np.ndarray, order_max=50, order_min=4, c_1=3
+    ) -> np.ndarray:
         """Transform time-domain data to time-frequency domain.
 
         Save the results if run for the first time, else load them.
@@ -140,14 +143,21 @@ class TfBursts:
              Array of time-frequency matrices for a set of channels and
              all trials of a single subject.
         """
-        if not hasattr(self, 'tfs'): # Check if alreay computed
+        if not hasattr(self, "tfs"):  # Check if alreay computed
             _, _, len_trial = epochs.shape
-            self.time_lim = len_trial/self.sfreq
-            self.tfs = superlets_mne_epochs(epochs, self.freqs, order_max=order_max, order_min=order_min, c_1=c_1, n_jobs=-1)
+            self.time_lim = len_trial / self.sfreq
+            self.tfs = superlets_mne_epochs(
+                epochs,
+                self.freqs,
+                order_max=order_max,
+                order_min=order_min,
+                c_1=c_1,
+                n_jobs=-1,
+            )
 
         return self.tfs
 
-    def _custom_fr_range(self, ch_av_psd:np.ndarray, channel_ids="all"):
+    def _custom_fr_range(self, ch_av_psd: np.ndarray, channel_ids="all"):
         """
         Identification of individualized frequency band ranges for burst detection, based
         on the peaks of a FOOOF model. This function aims to restrain (if possible)
@@ -178,7 +188,7 @@ class TfBursts:
                           Aperiodic parameters of custom FOOOF fits per channel.
         """
 
-        freq_step = self.freqs[1] - self.freqs[0] # Frequency resolution
+        freq_step = self.freqs[1] - self.freqs[0]  # Frequency resolution
 
         all_channels_fg = FOOOFGroup(
             peak_width_limits=[2.0, 12.0], peak_threshold=1.5, max_n_peaks=5
@@ -208,7 +218,9 @@ class TfBursts:
                 (all_channels_gauss[:, -1] == ch_id)
                 & (all_channels_gauss[:, 0] >= self.band_limits[0])
                 & (all_channels_gauss[:, 0] <= self.band_limits[2])
-            )[0] # Exclusion of peaks below or above 'self.band_limits'
+            )[
+                0
+            ]  # Exclusion of peaks below or above 'self.band_limits'
 
             # If the model does not iclude any periodic activity peaks for
             # a channel, place empty variables and continue.
@@ -238,14 +250,18 @@ class TfBursts:
                 channel_band_peaks = channel_band_peaks[band_peaks_ids]
                 channel_gauss = channel_gauss[band_peaks_ids]
 
-            
             channel_bandwidths = []
-            for gauss in channel_gauss: # Fit a gaussian to each peak, and compute the full width half maximum
+            for (
+                gauss
+            ) in (
+                channel_gauss
+            ):  # Fit a gaussian to each peak, and compute the full width half maximum
                 fwhm = 2 * np.sqrt(2 * np.log(2)) * gauss[1]
                 channel_bandwidths.append(np.around(fwhm * freq_step))
 
-            
-            low = np.where(channel_band_peaks <= self.band_limits[1])[0] # Split criterion
+            low = np.where(channel_band_peaks <= self.band_limits[1])[
+                0
+            ]  # Split criterion
             high = np.where(channel_band_peaks > self.band_limits[1])[0]
 
             # Dual band scenario: split into mu and beta.
@@ -263,8 +279,7 @@ class TfBursts:
                     ),
                 ]
 
-                
-                if mu_band[0] < self.band_limits[0] - 2: # Limit the bands
+                if mu_band[0] < self.band_limits[0] - 2:  # Limit the bands
                     mu_band[0] = self.band_limits[0] - 2
 
                 if mu_band[1] > self.band_limits[1]:
@@ -288,8 +303,7 @@ class TfBursts:
                 mu_search_ranges.append(mu_search_range)
                 beta_search_ranges.append(beta_search_range)
 
-            
-            elif low.size > 0 and high.size == 0: # Single band scenario
+            elif low.size > 0 and high.size == 0:  # Single band scenario
                 # If many peaks have been detected, expand the frequency range
                 # from the lowest to highest; else symmetric around single peak
                 mu_band = [
@@ -297,8 +311,7 @@ class TfBursts:
                     np.ceil(channel_band_peaks[-1] + channel_bandwidths[-1]),
                 ]
 
-                
-                if mu_band[0] < self.band_limits[0] - 2: # Limit the band
+                if mu_band[0] < self.band_limits[0] - 2:  # Limit the band
                     mu_band[0] = self.band_limits[0] - 2
 
                 if mu_band[1] > self.band_limits[1]:
@@ -306,10 +319,11 @@ class TfBursts:
 
                 mu_band = np.hstack(mu_band)
 
-                
-                mu_search_range = np.where( 
+                mu_search_range = np.where(
                     (self.freqs >= mu_band[0] - 3) & (self.freqs <= mu_band[1] + 3)
-                )[0] # Use the custom frequency bands instead of the 'canonical'
+                )[
+                    0
+                ]  # Use the custom frequency bands instead of the 'canonical'
 
                 mu_bands.append(mu_band)
                 mu_search_ranges.append(mu_search_range)
@@ -325,16 +339,16 @@ class TfBursts:
                     np.ceil(channel_band_peaks[-1] + channel_bandwidths[-1]),
                 ]
 
-                
-                if beta_band[0] < self.band_limits[1] - 2: # Limit the band
+                if beta_band[0] < self.band_limits[1] - 2:  # Limit the band
                     beta_band[0] = self.band_limits[1] - 2
 
                 beta_band = np.hstack(beta_band)
 
-                
                 beta_search_range = np.where(
                     (self.freqs >= beta_band[0] - 3) & (self.freqs <= beta_band[1] + 3)
-                )[0] # Use the custom frequency bands instead of the 'canonical'
+                )[
+                    0
+                ]  # Use the custom frequency bands instead of the 'canonical'
 
                 beta_bands.append(beta_band)
                 beta_search_ranges.append(beta_search_range)
@@ -353,8 +367,10 @@ class TfBursts:
             aperiodic_params,
         )
 
-    def burst_extraction(self, epochs, band="beta", std_noise=2, regress_ERF=False) -> None:
-        """ Time-frequency analysis with optional plotting and burst extraction
+    def burst_extraction(
+        self, epochs, band="beta", std_noise=2, regress_ERF=False
+    ) -> None:
+        """Time-frequency analysis with optional plotting and burst extraction
         per subject.
 
         Following data loading, time-frequency decomposition is performed either using the
@@ -390,13 +406,13 @@ class TfBursts:
         """
 
         # TF decomposition if not already done
-        if not hasattr(self, 'tfs'):
-            print('Extracting time frequency decomposition...')
+        if not hasattr(self, "tfs"):
+            print("Extracting time frequency decomposition...")
             _, _, len_trial = epochs.shape
-            self.time_lim = len_trial/self.sfreq 
+            self.time_lim = len_trial / self.sfreq
             self.tfs = self._apply_tf(epochs)
 
-        times =  np.linspace(
+        times = np.linspace(
             0,
             self.time_lim,
             int((np.abs(self.time_lim - 0)) * self.sfreq),
@@ -404,9 +420,7 @@ class TfBursts:
         times = np.around(times, decimals=3)
 
         # Average TF decomposition
-        av_psds = np.mean(
-             self.tfs, axis=(0, 3)
-        )
+        av_psds = np.mean(self.tfs, axis=(0, 3))
 
         # FOOOF model to remove aperiodic activity and
         # adjustment of mu and beta bands range per channel.
@@ -442,7 +456,7 @@ class TfBursts:
                 mu_thresholds.append(mu_threshold)
 
                 if beta_search_range.size == 1:
-                    beta_threshold = [] # Empty list if no beta band is detected
+                    beta_threshold = []  # Empty list if no beta band is detected
                 else:
                     beta_threshold = np.power(
                         10, aperiodic_params[ch_id, 0].reshape(-1, 1)
@@ -450,7 +464,7 @@ class TfBursts:
                         self.freqs[beta_search_range],
                         aperiodic_params[ch_id, 1].reshape(-1, 1),
                     )
-                beta_thresholds.append(beta_threshold) 
+                beta_thresholds.append(beta_threshold)
 
         del av_psds
         # Variable setting, based on the 'band' parameter.
@@ -505,7 +519,7 @@ class TfBursts:
                         + "Proceeding with 'canonical' {} band{} without aperiodic activity subtraction."
                     )
                     print(warn)
-                
+
                 else:
                     print(
                         "\tBurst extraction in custom {} band from {} to {} Hz.".format(
@@ -523,7 +537,7 @@ class TfBursts:
                 band_search_ranges[ch_id] = canon_band_range
                 thresholds[ch_id] = canon_threshold
                 bd_bands[ch_id] = canon_band
-        
+
             self.bursts = Parallel(n_jobs=epochs.shape[1], require="sharedmem")(
                 delayed(extract_bursts)(
                     np.copy(epochs[:, ch_id, :]),
@@ -531,17 +545,16 @@ class TfBursts:
                     times,
                     self.freqs[band_search_ranges[ch_id]],
                     bd_bands[ch_id],
-                    thresholds[ch_id].reshape(-1,1),
+                    thresholds[ch_id].reshape(-1, 1),
                     self.sfreq,
                     ch_id,
                     w_size=w_size,
                     std_noise=std_noise,
                     regress_ERF=regress_ERF,
-                    remove_fooof=self.remove_fooof
+                    remove_fooof=self.remove_fooof,
                 )
                 for ch_id in range(epochs.shape[1])
             )
-        
 
         else:
             print(
@@ -563,7 +576,7 @@ class TfBursts:
                     ch_id,
                     w_size=w_size,
                     std_noise=std_noise,
-                    remove_fooof=False
+                    remove_fooof=False,
                 )
                 for ch_id in range(epochs.shape[1])
             )

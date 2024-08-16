@@ -2,8 +2,6 @@ import numpy as np
 import unittest
 
 from betaburst.detection._utils import fwhm_burst_norm
-
-
 class FWHM_testing(unittest.TestCase):
     def setUp(self):
         self.none = np.nan

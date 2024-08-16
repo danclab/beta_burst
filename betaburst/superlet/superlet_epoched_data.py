@@ -12,7 +12,9 @@ from joblib import Parallel, delayed
 from betaburst.superlet.superlet import scale_from_period, superlet
 
 
-def superlets_mne_epochs(epochs, freqs, sfreq=250, order_max=50, order_min=4, c_1=3, n_jobs=1):
+def superlets_mne_epochs(
+    epochs, freqs, sfreq=250, order_max=50, order_min=4, c_1=3, n_jobs=1
+):
     """
     Returns a list of transformed superlets.
     """

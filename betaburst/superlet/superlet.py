@@ -10,6 +10,7 @@
 import numpy as np
 from scipy.signal import fftconvolve
 
+
 def superlet(
     data_arr: np.ndarray,
     samplerate: float,
@@ -19,7 +20,6 @@ def superlet(
     c_1=3,
     adaptive=False,
 ) -> np.ndarray:
-
     """
        Performs Superlet Transform (SLT) according to Moca et al. [1]_
        Both multiplicative SLT and fractional adaptive SLT are available.
@@ -79,10 +79,10 @@ def superlet(
        -----
        .. [1]
     """
-    if adaptive: # adaptive SLT
+    if adaptive:  # adaptive SLT
         gmean_spec = FASLT(data_arr, samplerate, scales, order_max, order_min, c_1)
 
-    else: # multiplicative SLT
+    else:  # multiplicative SLT
         gmean_spec = multiplicativeSLT(
             data_arr, samplerate, scales, order_max, order_min, c_1
         )
@@ -90,7 +90,14 @@ def superlet(
     return gmean_spec
 
 
-def multiplicativeSLT(data_arr: np.ndarray, samplerate: float, scales: np.ndarray, order_max: int, order_min=1, c_1=3) -> np.ndarray:
+def multiplicativeSLT(
+    data_arr: np.ndarray,
+    samplerate: float,
+    scales: np.ndarray,
+    order_max: int,
+    order_min=1,
+    c_1=3,
+) -> np.ndarray:
     """Multpilicative adaptive SL transform"""
 
     dt = 1 / samplerate
@@ -112,7 +119,14 @@ def multiplicativeSLT(data_arr: np.ndarray, samplerate: float, scales: np.ndarra
     return gmean_spec
 
 
-def FASLT(data_arr: np.ndarray, samplerate: float, scales: np.ndarray, order_max: int, order_min=1, c_1=3) -> np.ndarray:
+def FASLT(
+    data_arr: np.ndarray,
+    samplerate: float,
+    scales: np.ndarray,
+    order_max: int,
+    order_min=1,
+    c_1=3,
+) -> np.ndarray:
     """Fractional adaptive SL transform
 
     For non-integer orders fractional SLTs are
@@ -123,7 +137,9 @@ def FASLT(data_arr: np.ndarray, samplerate: float, scales: np.ndarray, order_max
     """
 
     dt = 1 / samplerate
-    fois = 1 / (2 * np.pi * scales) # frequencies of interest from the scales for the SL Morlet
+    fois = 1 / (
+        2 * np.pi * scales
+    )  # frequencies of interest from the scales for the SL Morlet
     orders = compute_adaptive_order(fois, order_min, order_max)
 
     # create the complete superlet set from
