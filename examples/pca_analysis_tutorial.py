@@ -133,7 +133,7 @@ ax[0].legend(fontsize=10)
 # %%
 from betaburst.analysis.burst_analysis import BurstSpace
 
-bs = BurstSpace(perc=0.5, nb_quartiles=10, tmin = 0, tmax = 5, time_step = 0.2)
+bs = BurstSpace(perc=0.5, nb_quartiles=10, tmin=0, tmax=5, time_step=0.2)
 scores_dists = bs.fit_transform(bursts)
 bs.plot_waveforms()
 
