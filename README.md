@@ -69,6 +69,17 @@ tfs = bm._apply_tf(eeg_data)
 bursts = bm.burst_extraction(epochs, band="beta")
 
 print("Detected bursts:", bursts)
+
+from betaburst.analysis.burst_analysis import BurstSpace
+
+bs = BurstSpace(perc=0.5, nb_quartiles=10, tmin=0, tmax=5, time_step=0.2)
+scores_dists = bs.fit_transform(bursts)
+# Distribution of waveforms along each PC axis
+bs.plot_waveforms()
+
+modulation_index, comp_waveforms = bs.waveforms_rate()
+# Heatmap of modulation index during time (bursts rates of each quartile)
+bs.plot_burst_rates()
 ```
 
 ## Testing
