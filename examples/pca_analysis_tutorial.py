@@ -126,3 +126,20 @@ for pc_ix, pc in enumerate(pc_labels):
     ax[pc_ix].plot(waveform_times, mean_waveform / 1e-15, lw=2, c="black", label="mean")
     ax[pc_ix].set_ylim(-200, 200)
 ax[0].legend(fontsize=10)
+
+# %% [markdown]
+## It could be done directly using our module
+
+# %%
+from betaburst.analysis.burst_analysis import BurstSpace
+
+bs = BurstSpace(perc=0.5, nb_quartiles=10, tmin = 0, tmax = 5, time_step = 0.2)
+scores_dists = bs.fit_transform(bursts)
+bs.plot_waveforms()
+
+# %% [markdown]
+## We can also plot heatmaps corresponding to the burst rates of each quartile and PC during time
+
+# %%
+modulation_index, comp_waveforms = bs.waveforms_rate()
+bs.plot_burst_rates()
