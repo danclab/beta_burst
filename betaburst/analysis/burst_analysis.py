@@ -237,6 +237,10 @@ class BurstSpace:
 
     def plot_burst_rates(self) -> None:
         """Plot the corresponding heatmaps."""
+
+        if not hasattr(self, 'modulation_index'):
+            self.modulation_index, self.comp_waveforms = self.waveforms_rate()
+
         vmin = np.min(self.modulation_index)
         vmax = np.max(self.modulation_index)
 

@@ -42,13 +42,13 @@ These dependencies will be installed automatically when you run the setup script
 
 ## Usage
 
-Here is a basic example of how to use it:
+Here is a basic example of how to extract burst from M/EEG data:
 
 ```python
 from betaburst.detection.burst_detection import TfBursts
 
-# Example usage with EEG data
-eeg_data = ...  # Your EEG data here
+# Example usage with M/EEG data
+meeg_data = ...  # Your M/EEG data here
 # Burst detection parameters
 freq_step = 0.5
 freqs = np.arange(5.0, 47.0, freq_step)
@@ -65,14 +65,24 @@ tfbursts =TfBursts(
         band_limits=[8, 10, 35],
         remove_fooof=False,
     )
-tfs = bm._apply_tf(eeg_data)
-bursts = bm.burst_extraction(epochs, band="beta")
 
+bursts = bm.burst_extraction(epochs, band="beta")
 print("Detected bursts:", bursts)
 
+# You can access time-frequency decompositions (using superlets)
+tfs = bm.tfs
+# Or without running burts extraction
+tfs = bm._apply_tf(meeg_data)
+```
+
+It is then possible to study the bursts waveforms using PCA.
+
+```python
 from betaburst.analysis.burst_analysis import BurstSpace
 
 bs = BurstSpace(perc=0.5, nb_quartiles=10, tmin=0, tmax=5, time_step=0.2)
+# Feat a PCA model (along the time axis of bursts) and compute a score
+# for each burst. The score is the distance to the PCA axis.
 scores_dists = bs.fit_transform(bursts)
 # Distribution of waveforms along each PC axis
 bs.plot_waveforms()
