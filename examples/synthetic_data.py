@@ -1,5 +1,4 @@
 # %%
-%matplotlib inline
 import numpy as np
 
 from betaburst.detection.burst_detection import TfBursts
