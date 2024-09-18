@@ -144,47 +144,13 @@ class BurstSpace:
         standardized_bursts = scaler.fit_transform(waveforms[pca_subset])
         self._apply_solver(standardized_bursts, n_components=n_components)
         self.components = self.drm.transform(waveforms)
-        self.scores_dists = self._dist_scores(waveforms)
+        self.modulation_index, self.comp_waveforms = self.dist_scores(waveforms)
 
         return self.scores_dists
 
-    def _dist_scores(self, waveforms):
+    def dist_scores(self):
         """Compute distance between mean waveform and waveforms spread on quartiles.
-
-        Parameters:
-        -----------
-        waveforms: np.array
-            Array containing all the waveforms.
-
-        Return:
-        -------
-        scores_dists: np.array.
-            Distance the mean waveform along each PCA axis and the bursts organised in quartiles based on their distance to the mean.
-        """
-        pc_labels = ["PC_{}".format(i + 1) for i in range(self.components.shape[1])]
-        features_scores = pd.DataFrame.from_dict(
-            {i: self.components[:, ix] for ix, i in enumerate(pc_labels)}
-        )
-        quartiles = np.linspace(0, 100, num=self.nb_quartiles)
-        quartiles = list(zip(quartiles[:-1], quartiles[1:]))
-        scores_dists = np.empty((len(quartiles), len(pc_labels), waveforms.shape[-1]))
-        for pc_ix, pc in enumerate(pc_labels):
-            scores = features_scores[
-                pc
-            ].values  # select the apropriate principal component from the dataframe
-            for q_ix, (b, e) in enumerate(quartiles):
-                q_map = (scores > np.percentile(scores, b)) & (
-                    scores <= np.percentile(scores, e)
-                )  # create a boolean map to select the waveforms
-                q_mean = np.mean(waveforms[q_map], axis=0)
-                scores_dists[q_ix, pc_ix, :] = q_mean
-
-        return scores_dists
-
-    def waveforms_rate(self):
-        """Transformation of bursts used in the dimensionality reduction model
-        acros each of its axes, and estimation of the burst waveforms in a
-        score-resolved manner.
+        Also compute waveforms rate for each quartile.
 
         Return:
         -------
@@ -196,11 +162,10 @@ class BurstSpace:
         """
 
         self.binning = np.arange(self.tmin, self.tmax + self.time_step, self.time_step)
-
-        self.modulation_index = np.empty(
+        modulation_index = np.empty(
             (self.components.shape[1], self.nb_quartiles, len(self.binning) - 1)
         )
-        self.comp_waveforms = np.empty(
+        comp_waveforms = np.empty(
             (
                 self.components.shape[1],
                 self.nb_quartiles,
@@ -208,46 +173,34 @@ class BurstSpace:
             )
         )
 
-        for idx_compo in range(self.components.shape[1]):  # Iterate over PC
-            current_compo = self.components[idx_compo, :]
-            # Divide waveforms in comps_groups along
-            quartiles = np.linspace(
-                np.min(current_compo), np.max(current_compo), self.nb_quartiles + 1
-            )
-
-            for idx_group in range(self.nb_quartiles):
-                # Group score limits.
-                scores_lims = [quartiles[idx_group], quartiles[idx_group + 1]]
-
-                # Condition specific waveforms.
-                if idx_group != self.nb_quartiles - 1:
-                    waveform_ids = np.where(
-                        (current_compo >= scores_lims[0])
-                        & (current_compo < scores_lims[1])
-                    )[0]
-                else:
-                    waveform_ids = np.where(current_compo >= scores_lims[0])[0]
-
-                waveform = np.mean(
-                    np.array(self.burst_dict["waveform"])[waveform_ids], axis=0
-                )  # Mean waveform corresponding to the quartile
-                selected_peak_time = np.array(self.burst_dict["peak_time"])[
-                    waveform_ids
-                ]  # Peaks times for the corresponding quartile
-                hist, _ = np.histogram(
-                    selected_peak_time, bins=self.binning
-                )  # Distribution of the peaks times
+        pc_labels = ["PC_{}".format(i + 1) for i in range(self.components.shape[1])]
+        features_scores = pd.DataFrame.from_dict(
+            {i: self.components[:, ix] for ix, i in enumerate(pc_labels)}
+        )
+        quartiles = np.linspace(0, 100, num=self.nb_quartiles)
+        quartiles = list(zip(quartiles[:-1], quartiles[1:]))
+        for pc_ix, pc in enumerate(pc_labels):
+            scores = features_scores[
+                pc
+            ].values  # select the apropriate principal component from the dataframe
+            for q_ix, (b, e) in enumerate(quartiles):
+                q_map = (scores > np.percentile(scores, b)) & (
+                    scores <= np.percentile(scores, e)
+                )  # create a boolean map to select the waveforms
+                q_mean = np.mean(np.array(self.burst_dict["waveform"])[q_map], axis=0)
+                selected_peak_time = np.array(self.burst_dict["peak_time"])[q_map]  # Peaks times for the corresponding quartile
+                hist, _ = np.histogram(selected_peak_time, bins=self.binning)  # Distribution of the peaks times
                 # Store results
-                self.modulation_index[idx_compo, idx_group, :] = hist
-                self.comp_waveforms[idx_compo, idx_group, :] = waveform
+                modulation_index[pc_ix, q_ix, :] = hist
+                comp_waveforms[pc_ix, q_ix, :] = q_mean
 
-        return self.modulation_index, self.comp_waveforms
+        return modulation_index, comp_waveforms
 
     def plot_burst_rates(self) -> None:
         """Plot the corresponding heatmaps."""
 
         if not hasattr(self, 'modulation_index'):
-            self.modulation_index, self.comp_waveforms = self.waveforms_rate()
+            self.modulation_index, self.comp_waveforms = self.dist_scores()
 
         vmin = np.min(self.modulation_index)
         vmax = np.max(self.modulation_index)
