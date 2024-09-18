@@ -23,8 +23,16 @@ class BurstSpace:
 
     Parameters
     -----------
-    perc: float. Defaut to 0.5.
+    tmin: float.
+        Left time limit to compute burst rate.
+    tmax: float.
+        Right time limit to compute burst rate.
+    time_step: float.
+        Time step to compute burst rate.
+    perc: float. Default to 0.5.
         Subset of the total amount of waveforms, in percentage, to be used in the PCA anaysis.
+    nb_quartiles: int. Default to 5.
+        Number of quartile to divide each PCA axis.
     """
 
     def __init__(
