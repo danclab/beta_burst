@@ -144,7 +144,7 @@ class BurstSpace:
         standardized_bursts = scaler.fit_transform(waveforms[pca_subset])
         self._apply_solver(standardized_bursts, n_components=n_components)
         self.components = self.drm.transform(waveforms)
-        self.modulation_index, self.comp_waveforms = self.dist_scores(waveforms)
+        self.modulation_index, self.comp_waveforms = self.dist_scores()
 
         return self.scores_dists
 
