@@ -146,7 +146,7 @@ class BurstSpace:
         self.components = self.drm.transform(waveforms)
         self.modulation_index, self.comp_waveforms = self.dist_scores()
 
-        return self.scores_dists
+        return self.modulation_index
 
     def dist_scores(self):
         """Compute distance between mean waveform and waveforms spread on quartiles.
@@ -161,7 +161,7 @@ class BurstSpace:
             Average waveforme corresponding to each component and quartile.
         """
 
-        self.binning = np.arange(self.tmin, self.tmax + self.time_step, self.time_step)
+        self.binning = np.arange(self.tmin, self.tmax +  self.time_step, self.time_step)
         modulation_index = np.empty(
             (self.components.shape[1], self.nb_quartiles, len(self.binning) - 1)
         )
@@ -276,6 +276,7 @@ class BurstSpace:
                 label="Burst rate",
                 ticks=np.linspace(vmin, vmax, num=5),
             )
+        plt.show()
 
     def plot_waveforms(self) -> None:
         """Viz of the burst dictionary and deviation from the mean."""
@@ -286,6 +287,7 @@ class BurstSpace:
         quartiles = list(zip(quartiles[:-1], quartiles[1:]))
         col_range = plt.cm.cool(np.linspace(0, 1, num=len(quartiles)))
         mean_waveform = np.mean(waveforms, axis=0)
+        scores_dists = np.transpose(self.comp_waveforms, axes=[1, 0, 2])
 
         _, ax = plt.subplots(5, 4, figsize=(20, 25))
         ax = ax.flatten()
@@ -294,10 +296,11 @@ class BurstSpace:
             for q_ix, (b, e) in enumerate(quartiles):
                 ax[pc_ix].plot(
                     waveform_times,
-                    self.scores_dists[q_ix, pc_ix],
+                    scores_dists[q_ix, pc_ix],
                     lw=2,
                     c=col_range[q_ix],
                     label="Q {}".format(q_ix + 1),
                 )
             ax[pc_ix].plot(waveform_times, mean_waveform, lw=2, c="black", label="mean")
         ax[0].legend(fontsize=10)
+        plt.show()
