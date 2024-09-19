@@ -160,13 +160,15 @@ def ascertain_trials(burst_data, channel_ids, labels):
     unique_labels = np.unique(labels)
     cond1 = np.array(common_trials)[np.where(labels == unique_labels[0])[0]].tolist()
     if len(unique_labels) > 1:
-        cond2 = np.array(common_trials)[np.where(labels == unique_labels[1])[0]].tolist()
+        cond2 = np.array(common_trials)[
+            np.where(labels == unique_labels[1])[0]
+        ].tolist()
 
     # Return the common trials groupped by condition.
     if len(unique_labels) > 1:
         common_trials = [cond1, cond2]
     else:
-        common_trials = [cond1[:len(cond1)//2], cond1[len(cond1)//2:]]
+        common_trials = [cond1[: len(cond1) // 2], cond1[len(cond1) // 2 :]]
 
     return common_trials, missing_trials
 
@@ -516,10 +518,8 @@ def vis_permutation_cluster_test(
             ]
         else:
             obs_diff = [
-                np.mean(data[conv_id], axis=(0, -1))
-                - np.mean(dat, axis=(0, -1)),
-                np.mean(dat, axis=(0, -1))
-                - np.mean(data[conv_id], axis=(0, -1)),
+                np.mean(data[conv_id], axis=(0, -1)) - np.mean(dat, axis=(0, -1)),
+                np.mean(dat, axis=(0, -1)) - np.mean(data[conv_id], axis=(0, -1)),
             ]
 
         # Data concatenation.
@@ -558,7 +558,7 @@ def vis_permutation_cluster_test(
         # Null distribution sorting.
         for c in range(null_dist.shape[1]):
             null_dist[:, c] = np.sort(null_dist[:, c])
-        
+
         # Empirical ditribution of maximal statistic of null distribution.
         if threshold == None:
             threshold = np.percentile(np.max(null_dist[-1, :]), 95)

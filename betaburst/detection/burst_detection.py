@@ -72,8 +72,6 @@ class TfBursts:
 
     Attributes
     ----------
-    channels: list
-              Names of channels to include in the analysis.
     tmin, tmax: float
                 Start and end time of the epochs in seconds, relative to
                 the time-locked event.
@@ -104,6 +102,8 @@ class TfBursts:
     def __init__(
         self,
         sfreq: float,
+        tmin: float,
+        tmax: float,
         freqs: np.ndarray,
         fr_band: np.ndarray,
         band_search_range: list,
@@ -112,6 +112,8 @@ class TfBursts:
         band_limits=[8, 15, 30],
     ):
         self.sfreq = sfreq
+        self.tmin = tmin
+        self.tmax = tmax
         self.freqs = freqs
         self.fr_band = fr_band
         self.band_search_range = band_search_range
@@ -157,7 +159,7 @@ class TfBursts:
 
         return self.tfs
 
-    def _custom_fr_range(self, ch_av_psd: np.ndarray, channel_ids="all"):
+    def _custom_fr_range(self, ch_av_psd: np.ndarray):
         """
         Identification of individualized frequency band ranges for burst detection, based
         on the peaks of a FOOOF model. This function aims to restrain (if possible)
@@ -170,10 +172,6 @@ class TfBursts:
         ----------
         ch_av_psd: numpy array
                    Across-trials average PSD per channel.
-        channel_ids: str or list, optional
-                     Indices of channels to take into account while fitting the
-                     aperiodic activity. If set to "all" all channels are used.
-                     Defaults to "all".
 
         Returns
         -------
@@ -193,15 +191,9 @@ class TfBursts:
         all_channels_fg = FOOOFGroup(
             peak_width_limits=[2.0, 12.0], peak_threshold=1.5, max_n_peaks=5
         )  # FOOOF Group model for all channels
-        if channel_ids == "all":
-            all_channels_fg.fit(
-                self.freqs[self.band_search_range], ch_av_psd[:, self.band_search_range]
-            )
-        else:
-            all_channels_fg.fit(
-                self.freqs[self.band_search_range],
-                ch_av_psd[channel_ids, :][:, self.band_search_range],
-            )
+        all_channels_fg.fit(
+            self.freqs[self.band_search_range], ch_av_psd[:, self.band_search_range]
+        )
 
         all_channels_gauss = all_channels_fg.get_params("gaussian_params")
         aperiodic_params = all_channels_fg.get_params("aperiodic_params")
@@ -413,9 +405,9 @@ class TfBursts:
             self.tfs = self._apply_tf(epochs)
 
         times = np.linspace(
-            0,
-            self.time_lim,
-            int((np.abs(self.time_lim - 0)) * self.sfreq),
+            self.tmin,
+            self.tmax,
+            int((np.abs(self.tmax - self.tmin)) * self.sfreq),
         )
         times = np.around(times, decimals=3)
 

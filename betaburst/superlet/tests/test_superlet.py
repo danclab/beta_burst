@@ -1,6 +1,7 @@
 import numpy as np
 from betaburst.superlet.superlet import superlet, scale_from_period
 
+
 def gen_superlet_testdata(freqs=[20, 40, 60], cycles=11, fs=1000, eps=0):
     """
     Harmonic superposition of multiple
@@ -59,7 +60,7 @@ if __name__ == "__main__":
         adaptive=True,
     )
 
-    ampls = np.abs(spec) # amplitude scalogram
+    ampls = np.abs(spec)  # amplitude scalogram
 
     fig, (ax1, ax2) = plt.subplots(
         2, 1, sharex=True, gridspec_kw={"height_ratios": [1, 3]}, figsize=(6, 6)

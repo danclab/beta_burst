@@ -161,7 +161,7 @@ class BurstSpace:
             Average waveforme corresponding to each component and quartile.
         """
 
-        self.binning = np.arange(self.tmin, self.tmax +  self.time_step, self.time_step)
+        self.binning = np.arange(self.tmin, self.tmax + self.time_step, self.time_step)
         modulation_index = np.empty(
             (self.components.shape[1], self.nb_quartiles, len(self.binning) - 1)
         )
@@ -173,11 +173,11 @@ class BurstSpace:
             )
         )
 
-        pc_labels = ["PC_{}".format(i + 1) for i in range(self.components.shape[1])]
+        pc_labels = ["PC_{}".format(i) for i in range(self.components.shape[1])]
         features_scores = pd.DataFrame.from_dict(
             {i: self.components[:, ix] for ix, i in enumerate(pc_labels)}
         )
-        quartiles = np.linspace(0, 100, num=self.nb_quartiles)
+        quartiles = np.linspace(0, 100, num=self.nb_quartiles + 1)
         quartiles = list(zip(quartiles[:-1], quartiles[1:]))
         for pc_ix, pc in enumerate(pc_labels):
             scores = features_scores[
@@ -188,8 +188,12 @@ class BurstSpace:
                     scores <= np.percentile(scores, e)
                 )  # create a boolean map to select the waveforms
                 q_mean = np.mean(np.array(self.burst_dict["waveform"])[q_map], axis=0)
-                selected_peak_time = np.array(self.burst_dict["peak_time"])[q_map]  # Peaks times for the corresponding quartile
-                hist, _ = np.histogram(selected_peak_time, bins=self.binning)  # Distribution of the peaks times
+                selected_peak_time = np.array(self.burst_dict["peak_time"])[
+                    q_map
+                ]  # Peaks times for the corresponding quartile
+                hist, _ = np.histogram(
+                    selected_peak_time, bins=self.binning
+                )  # Distribution of the peaks times
                 # Store results
                 modulation_index[pc_ix, q_ix, :] = hist
                 comp_waveforms[pc_ix, q_ix, :] = q_mean
@@ -199,7 +203,7 @@ class BurstSpace:
     def plot_burst_rates(self) -> None:
         """Plot the corresponding heatmaps."""
 
-        if not hasattr(self, 'modulation_index'):
+        if not hasattr(self, "modulation_index"):
             self.modulation_index, self.comp_waveforms = self.dist_scores()
 
         vmin = np.min(self.modulation_index)
@@ -216,6 +220,7 @@ class BurstSpace:
 
         # Define an offset to spread the waveforms
         waveform_offset = 5
+        max_abs = np.max(np.abs(self.comp_waveforms)) / 2
 
         for i in range(
             self.modulation_index.shape[0]
@@ -231,7 +236,7 @@ class BurstSpace:
             for j in range(self.nb_quartiles):
                 # Apply an offset to spread out the waveforms vertically
                 ax_waveform.plot(
-                    self.comp_waveforms[i, j, :] + j * waveform_offset,
+                    self.comp_waveforms[i, j, :] / max_abs + j * waveform_offset,
                     color=colors[j],
                     label=f"Group {j+1}",
                 )
@@ -276,7 +281,7 @@ class BurstSpace:
                 label="Burst rate",
                 ticks=np.linspace(vmin, vmax, num=5),
             )
-        plt.show()
+        plt.show(block=False)
 
     def plot_waveforms(self) -> None:
         """Viz of the burst dictionary and deviation from the mean."""

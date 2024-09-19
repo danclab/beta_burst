@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from betaburst.detection.burst_detection import TfBursts
-from betaburst.tests._utils import generate_transient_minimum
+from _utils import generate_transient_minimum
 
 np.random.seed(42)
 
@@ -40,6 +40,8 @@ upto_gamma_range = np.where(
 def bm():
     return TfBursts(
         fs,
+        tmin=0,
+        tmax=5,
         freqs=freqs,
         fr_band=upto_gamma_band,
         band_search_range=upto_gamma_range,

@@ -55,14 +55,14 @@ def test_fit_transform(burst_data):
     """Test fit_transform method."""
     bs = BurstSpace(tmin=0, tmax=10, time_step=0.1, perc=0.5, nb_quartiles=5)
     scores_dists = bs.fit_transform(burst_data, n_components=10)
-    assert scores_dists.shape == (4, 10, 64)
+    assert scores_dists.shape == (10, 5, 100)
 
 
 def test_waveforms_rate(burst_data):
     """Test waveforms_rate method."""
     bs = BurstSpace(tmin=0, tmax=10, time_step=0.1, perc=0.5, nb_quartiles=5)
     scores_dists = bs.fit_transform(burst_data)
-    modulation_index, comp_waveforms = bs.waveforms_rate()
+    modulation_index, comp_waveforms = bs.dist_scores()
     assert modulation_index.shape == (20, 5, 100)
     assert comp_waveforms.shape == (20, 5, 64)
 
@@ -71,7 +71,7 @@ def test_plot_burst_rates(burst_data):
     """Test plot_burst_rates method."""
     bs = BurstSpace(tmin=0, tmax=10, time_step=0.1, perc=0.5, nb_quartiles=5)
     scores_dists = bs.fit_transform(burst_data)
-    modulation_index, comp_waveforms = bs.waveforms_rate()
+    modulation_index, comp_waveforms = bs.dist_scores()
     bs.plot_burst_rates()
     # Only test if it runs without error
 
