@@ -36,9 +36,11 @@ class TfBursts:
 
     Parameters
     ----------
-    exp_variables: dict
-                   Experimental variables contained in the corresponding
-                   'variables.json' file.
+    tmin, tmax: float
+                Start and end time of the epochs in seconds, relative to
+                the time-locked event.
+    sfreq: int
+           Sampling frequency of the recordings in Hz.
     freqs: 1D numpy array
            Frequency axis corresponding to the time-frequency anaysis.
     fr_band: two-element list or 1D array
@@ -59,33 +61,6 @@ class TfBursts:
                  Frequency limits for splitting detected periodic peaks of
                  the FOOOF model in the custom mu and beta bands.
                  Defaults to [8,15,30] Hz.
-    produce_plots: bool, optional
-                   Plot the time-frequency maps, PSD and aperiodic fits before
-                   burst extraction. Mainly useful for debugging purposes.
-                   Defaults to "True".
-    plot_format: str {"pdf", "png"}, optional
-                 File format. Prefer "pdf" for editing with vector graphics
-                 applications, or "png" for less space usage and better
-                 integration with presentations. Ignored if 'produce_plots'
-                 is set to "False".
-                 Defaults to "pdf".
-
-    Attributes
-    ----------
-    tmin, tmax: float
-                Start and end time of the epochs in seconds, relative to
-                the time-locked event.
-    sfreq: int
-           Sampling frequency of the recordings in Hz.
-    exp_time: 1D numpy array
-              Experimental (cropped) time axis.
-    exp_time_periods: 4-element list or 1D array
-                      Beginning of baseline period, beginning of task period,
-                      end of task period and end of rebound period (in seconds
-                      relative to the time-locked event).
-    savepath: str
-              Parent directory that contains all results. Defaults to the
-              path provided in the corresponding 'variables.json' file.
 
     References
     ----------
