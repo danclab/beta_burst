@@ -192,10 +192,10 @@ class TfBursts:
             # If the model does not iclude any periodic activity peaks for
             # a channel, place empty variables and continue.
             if len(this_channel) == 0:
-                mu_band = np.array([np.NAN, np.NAN])
-                beta_band = np.array([np.NAN, np.NAN])
-                mu_search_range = np.array([np.NAN])
-                beta_search_range = np.array([np.NAN])
+                mu_band = np.array([np.nan, np.nan])
+                beta_band = np.array([np.nan, np.nan])
+                mu_search_range = np.array([np.nan])
+                beta_search_range = np.array([np.nan])
 
                 mu_bands.append(mu_band)
                 beta_bands.append(mu_band)
@@ -371,10 +371,15 @@ class TfBursts:
         bursts: dict
             Contains the bursts and some parameters
         """
-
+        try:
+            epochs = epochs.get_data(copy=False) # Convert MNE object to numpy array
+        except AttributeError:
+            pass
+        
         # TF decomposition if not already done
         if not hasattr(self, "tfs"):
             print("Extracting time frequency decomposition...")
+            
             _, _, len_trial = epochs.shape
             self.time_lim = len_trial / self.sfreq
             self.tfs = self._apply_tf(epochs)
